@@ -13,6 +13,7 @@
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rubberband-wasm@3.3.0/dist/index.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
   <style>
     :root {
       --bg-top: #112038;
@@ -652,39 +653,39 @@
       return outputBuffers.map((buf) => buf.subarray(0, write));
     }
 
-    function encodeWav(sampleRate, channelBuffers) {
-      const totalSamples = channelBuffers[0].length * channelBuffers.length;
-      const buffer = new ArrayBuffer(44 + totalSamples * 2);
-      const view = new DataView(buffer);
-      const writeString = (offset, text) => {
-        for (let i = 0; i < text.length; i += 1) {
-          view.setUint8(offset + i, text.charCodeAt(i));
+    function encodeMp3(sampleRate, channelBuffers) {
+      const channelCount = Math.min(channelBuffers.length, 2);
+      const encoder = new lamejs.Mp3Encoder(channelCount, sampleRate, 192);
+      const samplesPerFrame = 1152;
+      const mp3Chunks = [];
+
+      for (let offset = 0; offset < channelBuffers[0].length; offset += samplesPerFrame) {
+        const left = new Int16Array(samplesPerFrame);
+        const right = channelCount === 2 ? new Int16Array(samplesPerFrame) : left;
+        const frameLength = Math.min(samplesPerFrame, channelBuffers[0].length - offset);
+
+        for (let i = 0; i < frameLength; i += 1) {
+          const leftSample = Math.max(-1, Math.min(1, channelBuffers[0][offset + i]));
+          left[i] = leftSample < 0 ? leftSample * 0x8000 : leftSample * 0x7fff;
+          if (channelCount === 2) {
+            const rightSample = Math.max(-1, Math.min(1, channelBuffers[1][offset + i]));
+            right[i] = rightSample < 0 ? rightSample * 0x8000 : rightSample * 0x7fff;
+          }
         }
-      };
 
-      writeString(0, "RIFF");
-      view.setUint32(4, 36 + totalSamples * 2, true);
-      writeString(8, "WAVE");
-      writeString(12, "fmt ");
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, channelBuffers.length, true);
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * channelBuffers.length * 2, true);
-      view.setUint16(32, channelBuffers.length * 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, "data");
-      view.setUint32(40, totalSamples * 2, true);
-
-      let offset = 44;
-      for (let i = 0; i < channelBuffers[0].length; i += 1) {
-        for (let channel = 0; channel < channelBuffers.length; channel += 1) {
-          const sample = Math.max(-1, Math.min(1, channelBuffers[channel][i]));
-          view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-          offset += 2;
+        const encoded = channelCount === 2
+          ? encoder.encodeBuffer(left, right)
+          : encoder.encodeBuffer(left);
+        if (encoded.length > 0) {
+          mp3Chunks.push(encoded);
         }
       }
-      return buffer;
+
+      const finalChunk = encoder.flush();
+      if (finalChunk.length > 0) {
+        mp3Chunks.push(finalChunk);
+      }
+      return new Blob(mp3Chunks, { type: "audio/mpeg" });
     }
 
     function sanitizeFileName(name) {
@@ -727,10 +728,10 @@
 
           const timeRatio = computeTimeRatio(sourceBpm, targetBpm);
           const stretched = runRubberband(rbApi, channelBuffers, audioBuffer.sampleRate, timeRatio);
-          const wavBuffer = encodeWav(audioBuffer.sampleRate, stretched);
+          const mp3Blob = encodeMp3(audioBuffer.sampleRate, stretched);
 
           const baseName = sanitizeFileName(track.name.replace(/\.[^./]+$/, ""));
-          zip.file(`${baseName}_${targetBpm}bpm.wav`, wavBuffer);
+          zip.file(`${baseName}_${targetBpm}bpm.mp3`, mp3Blob);
         }
 
         speedStatus.textContent = "Zipping files...";
