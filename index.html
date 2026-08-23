@@ -65,6 +65,15 @@
       justify-content: space-between;
     }
 
+    .hero-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .title {
       margin: 0;
       font-family: "Syne", sans-serif;
@@ -77,6 +86,26 @@
     .hint {
       font-size: 0.88rem;
       opacity: 0.85;
+    }
+
+    .issue-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: none;
+      background: rgba(17, 32, 56, 0.08);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .issue-link:hover {
+      transform: translateY(-1px);
+      filter: brightness(0.98);
     }
 
     .section {
@@ -142,7 +171,7 @@
 
     .bpm-value {
       font-family: "Syne", sans-serif;
-      font-size: clamp(1.6rem, 5vw, 2.5rem);
+      font-size: clamp(1.4rem, 4.5vw, 2.2rem);
       font-weight: 800;
       color: #0f5f55;
       line-height: 1;
@@ -220,6 +249,8 @@
     <header class="hero">
       <h1 class="title">Beat Tapper</h1>
       <div class="hint">Space: tap BPM | Auto-saves on 10 stable taps | 1-9: jump 10%-90%</div>
+      <a class="issue-link" href="https://github.com/AlxndrJhn/beat_tapper/issues" target="_blank"
+        rel="noreferrer">Report issues</a>
     </header>
 
     <section class="section">
@@ -229,20 +260,22 @@
         <button id="chooseFolderBtn" type="button">Choose Folder…</button>
         <input id="fileInput" type="file" multiple accept="audio/*" hidden />
       </div>
-      <span>Track</span>
-      <span id="trackLabel" class="track-chip">Loading...</span>
-
+      <div>
+        <span>Track</span>
+        <span id="trackLabel" class="track-chip">Loading...</span>
+      </div>
       <div class="controls">
         <div class="chooser">
           <button id="playBtn" type="button">Play / Pause</button>
           <button id="saveBtn" type="button">Save BPM</button>
           <button id="downloadBtn" type="button">Download results</button>
           <button id="nextBtn" type="button">Next File</button>
+          <button id="prevBtn" type="button">Previous File</button>
         </div>
 
         <aside class="bpm-box">
           <div class="bpm-value" id="bpmValue">---</div>
-          <div class="bpm-meta" id="tapMeta">Tap with Space to detect BPM</div>
+          <div class="bpm-meta">Tap with Space to detect BPM</div>
         </aside>
       </div>
 
@@ -273,8 +306,8 @@
     const playBtn = document.getElementById("playBtn");
     const saveBtn = document.getElementById("saveBtn");
     const nextBtn = document.getElementById("nextBtn");
+    const prevBtn = document.getElementById("prevBtn");
     const bpmValue = document.getElementById("bpmValue");
-    const tapMeta = document.getElementById("tapMeta");
     const statusEl = document.getElementById("status");
     const speedSlider = document.getElementById("speedSlider");
     const speedValue = document.getElementById("speedValue");
@@ -429,17 +462,14 @@
       const track = getCurrentTrack();
       if (!track) {
         bpmValue.textContent = "---";
-        tapMeta.textContent = "Tap with Space to detect BPM";
         return;
       }
 
       const saved = results[trackKey(track)];
       if (saved && typeof saved.bpm === "number") {
         bpmValue.textContent = saved.bpm.toFixed(1);
-        tapMeta.textContent = "Saved BPM loaded. Tap Space to retap.";
       } else {
         bpmValue.textContent = "---";
-        tapMeta.textContent = "Tap with Space to detect BPM";
       }
     }
 
@@ -484,7 +514,6 @@
       }
 
       if (tapTimes.length < 2) {
-        tapMeta.textContent = "Keep tapping...";
         return;
       }
 
@@ -503,15 +532,11 @@
       bpmValue.textContent = bpm.toFixed(1);
 
       if (tapTimes.length < 10) {
-        tapMeta.textContent = `${lastTapCount} taps (${10 - tapTimes.length} more for auto-save)`;
         return;
       }
 
-      tapMeta.textContent = `${lastTapCount} taps | span ${minIntervalMs.toFixed(0)}-${maxIntervalMs.toFixed(0)} ms`;
-
       if (maxIntervalMs < 1.1 * avgIntervalMs && minIntervalMs > 0.9 * avgIntervalMs) {
         isAutoSaving = true;
-        tapMeta.textContent = `${lastTapCount} taps | stable window detected`;
         setStatus(`Stable 10-tap window detected for ${getCurrentTrack()?.relPath}. Saving...`);
 
         const saved = await saveCurrentBpm();
@@ -626,7 +651,7 @@
 
       let write = 0;
       const retrieve = (final) => {
-        for (;;) {
+        for (; ;) {
           const available = rbApi.rubberband_available(state);
           if (available < 1) {
             break;
@@ -854,6 +879,17 @@
 
     nextBtn.addEventListener("click", async () => {
       await goToNextTrack();
+    });
+    prevBtn.addEventListener("click", async () => {
+      if (!tracks.length) {
+        return;
+      }
+      if (currentIndex <= 0) {
+        setStatus("Reached first file.");
+        return;
+      }
+      currentIndex -= 1;
+      await loadCurrentTrack();
     });
 
     document.addEventListener("keydown", (event) => {
