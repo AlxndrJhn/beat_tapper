@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BPM Tap</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/rubberband-wasm@3.3.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg-top: #112038;
+      --bg-mid: #1f4c5e;
+      --bg-bot: #efd9c1;
+      --ink: #112038;
+      --panel: rgba(255, 248, 239, 0.86);
+      --accent: #f16a3a;
+      --accent-2: #4ac0ad;
+      --line: rgba(17, 32, 56, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Space Mono", monospace;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 15%, rgba(255, 255, 255, 0.35), transparent 45%),
+        radial-gradient(circle at 90% 75%, rgba(255, 255, 255, 0.25), transparent 50%),
+        linear-gradient(165deg, var(--bg-top), var(--bg-mid) 50%, var(--bg-bot));
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(980px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(5px);
+      overflow: hidden;
+      animation: pop-in 0.55s ease-out;
+    }
+
+    .hero {
+      padding: 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .title {
+      margin: 0;
+      font-family: "Syne", sans-serif;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      line-height: 1;
+      font-size: clamp(1.7rem, 3.5vw, 2.65rem);
+    }
+
+    .hint {
+      font-size: 0.88rem;
+      opacity: 0.85;
+    }
+
+    .section {
+      padding: 20px 24px 24px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+    }
+
+    .chooser {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .track-chip,
+    button {
+      font-family: inherit;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.88rem;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--ink);
+    }
+
+    .track-chip {
+      max-width: min(62vw, 560px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    button {
+      background: var(--accent);
+      color: #fffdf9;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(0.95);
+    }
+
+    .bpm-box {
+      text-align: right;
+      min-width: 190px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px dashed var(--line);
+      background: rgba(74, 192, 173, 0.12);
+    }
+
+    .bpm-value {
+      font-family: "Syne", sans-serif;
+      font-size: clamp(1.6rem, 5vw, 2.5rem);
+      font-weight: 800;
+      color: #0f5f55;
+      line-height: 1;
+    }
+
+    .bpm-meta {
+      font-size: 0.82rem;
+      opacity: 0.85;
+    }
+
+    #wave {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 8px;
+    }
+
+    .status {
+      min-height: 1.1rem;
+      font-size: 0.88rem;
+      opacity: 0.9;
+    }
+
+    .section-divider {
+      border-top: 1px solid var(--line);
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1 1 260px;
+      accent-color: var(--accent);
+    }
+
+    .speed-value {
+      font-family: "Syne", sans-serif;
+      font-weight: 800;
+      font-size: 1.4rem;
+      color: #0f5f55;
+      min-width: 4ch;
+      text-align: right;
+    }
+
+    @keyframes pop-in {
+      from {
+        transform: translateY(10px) scale(0.98);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .bpm-box {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <header class="hero">
+      <h1 class="title">Beat Tapper</h1>
+      <div class="hint">Space: tap BPM | Auto-saves on 10 stable taps | 1-9: jump 10%-90%</div>
+    </header>
+
+    <section class="section">
+      <div class="chooser">
+        <span>Folder</span>
+        <span id="folderLabel" class="track-chip">No folder selected</span>
+        <button id="chooseFolderBtn" type="button">Choose Folder…</button>
+        <input id="fileInput" type="file" multiple accept="audio/*" hidden />
+      </div>
+      <span>Track</span>
+      <span id="trackLabel" class="track-chip">Loading...</span>
+
+      <div class="controls">
+        <div class="chooser">
+          <button id="playBtn" type="button">Play / Pause</button>
+          <button id="saveBtn" type="button">Save BPM</button>
+          <button id="downloadBtn" type="button">Download results</button>
+          <button id="nextBtn" type="button">Next File</button>
+        </div>
+
+        <aside class="bpm-box">
+          <div class="bpm-value" id="bpmValue">---</div>
+          <div class="bpm-meta" id="tapMeta">Tap with Space to detect BPM</div>
+        </aside>
+      </div>
+
+      <div id="wave"></div>
+      <div class="status" id="status">Load a track to begin.</div>
+    </section>
+
+    <section class="section section-divider">
+      <h2 class="title" style="font-size: 1.3rem;">Speed Up Songs</h2>
+      <div class="slider-row">
+        <label for="speedSlider">Target tempo</label>
+        <input id="speedSlider" type="range" min="150" max="220" step="2.5" value="170" />
+        <span class="speed-value" id="speedValue">170.0</span>
+        <span>BPM</span>
+      </div>
+      <div class="chooser">
+        <button id="speedUpBtn" type="button">Download sped up songs</button>
+      </div>
+      <div class="status" id="speedStatus">Tap and save BPMs above, then pick a target tempo.</div>
+    </section>
+  </main>
+
+  <script>
+    const trackLabel = document.getElementById("trackLabel");
+    const folderLabel = document.getElementById("folderLabel");
+    const chooseFolderBtn = document.getElementById("chooseFolderBtn");
+    const fileInput = document.getElementById("fileInput");
+    const playBtn = document.getElementById("playBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const bpmValue = document.getElementById("bpmValue");
+    const tapMeta = document.getElementById("tapMeta");
+    const statusEl = document.getElementById("status");
+    const speedSlider = document.getElementById("speedSlider");
+    const speedValue = document.getElementById("speedValue");
+    const speedUpBtn = document.getElementById("speedUpBtn");
+    const speedStatus = document.getElementById("speedStatus");
+
+    const AUDIO_EXTENSIONS = new Set(["mp3", "opus", "m4a", "wav", "flac", "ogg"]);
+    const HANDLE_DB = "bpmTool";
+    const HANDLE_STORE = "handles";
+    const HANDLE_KEY = "folder";
+    const RESULTS_STORE = "results";
+    const RESULTS_KEY = "bpm";
+
+    let rootLabel = null;
+    let tracks = [];
+    let results = {};
+    let currentIndex = 0;
+    let currentBpm = null;
+    let lastTapCount = 0;
+    let tapTimes = [];
+    let isAutoSaving = false;
+    let currentObjectUrl = null;
+
+    function openHandleDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(HANDLE_DB, 2);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains(HANDLE_STORE)) {
+            request.result.createObjectStore(HANDLE_STORE);
+          }
+          if (!request.result.objectStoreNames.contains(RESULTS_STORE)) {
+            request.result.createObjectStore(RESULTS_STORE);
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function idbGet(key, storeName = HANDLE_STORE) {
+      const db = await openHandleDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const request = tx.objectStore(storeName).get(key);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function idbSet(key, value, storeName = HANDLE_STORE) {
+      const db = await openHandleDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    function isAudioFile(name) {
+      const ext = name.split(".").pop().toLowerCase();
+      return AUDIO_EXTENSIONS.has(ext);
+    }
+
+    function trackKey(track) {
+      return `${rootLabel}/${track.relPath}`;
+    }
+
+    const waveSurfer = WaveSurfer.create({
+      container: "#wave",
+      waveColor: "#4ac0ad",
+      progressColor: "#f16a3a",
+      cursorColor: "#112038",
+      cursorWidth: 2,
+      height: 150,
+      normalize: true,
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 2,
+    });
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    async function startPlaybackForCurrentTrack() {
+      const track = getCurrentTrack();
+      if (!track || !waveSurfer.getDuration()) {
+        return;
+      }
+
+      try {
+        await waveSurfer.play();
+        setStatus(`Playing: ${track.relPath} (${currentIndex + 1}/${tracks.length})`);
+      } catch (error) {
+        setStatus(`Loaded: ${track.relPath}. Press Play if autoplay was blocked.`);
+      }
+    }
+
+    async function fetchResults() {
+      const saved = await idbGet(RESULTS_KEY, RESULTS_STORE);
+      return saved && typeof saved === "object" ? saved : {};
+    }
+
+    async function collectTracksFromDirectory(dirHandle, prefix) {
+      const found = [];
+      for await (const [name, handle] of dirHandle.entries()) {
+        const relPath = prefix ? `${prefix}/${name}` : name;
+        if (handle.kind === "directory") {
+          found.push(...(await collectTracksFromDirectory(handle, relPath)));
+        } else if (isAudioFile(name)) {
+          found.push({ name, relPath, getFile: () => handle.getFile() });
+        }
+      }
+      return found;
+    }
+
+    function collectTracksFromFileList(fileList) {
+      return Array.from(fileList)
+        .filter((file) => isAudioFile(file.name))
+        .map((file) => ({
+          name: file.name,
+          relPath: file.webkitRelativePath || file.name,
+          getFile: () => Promise.resolve(file),
+        }));
+    }
+
+    async function scanAndLoad(newTracks) {
+      setStatus("Scanning folder...");
+      folderLabel.textContent = rootLabel;
+      results = await fetchResults();
+      tracks = newTracks.sort((left, right) =>
+        left.relPath.toLowerCase().localeCompare(right.relPath.toLowerCase()),
+      );
+
+      if (!tracks.length) {
+        trackLabel.textContent = "No files found";
+        setStatus("No audio tracks found in the selected folder.");
+        return;
+      }
+
+      const firstUntagged = tracks.findIndex((track) => !(trackKey(track) in results));
+      currentIndex = Math.max(0, firstUntagged === -1 ? 0 : firstUntagged);
+      await loadCurrentTrack();
+    }
+
+    function getCurrentTrack() {
+      return tracks[currentIndex] || null;
+    }
+
+    function updateBpmDisplayForCurrentTrack() {
+      const track = getCurrentTrack();
+      if (!track) {
+        bpmValue.textContent = "---";
+        tapMeta.textContent = "Tap with Space to detect BPM";
+        return;
+      }
+
+      const saved = results[trackKey(track)];
+      if (saved && typeof saved.bpm === "number") {
+        bpmValue.textContent = saved.bpm.toFixed(1);
+        tapMeta.textContent = "Saved BPM loaded. Tap Space to retap.";
+      } else {
+        bpmValue.textContent = "---";
+        tapMeta.textContent = "Tap with Space to detect BPM";
+      }
+    }
+
+    async function loadCurrentTrack() {
+      const track = getCurrentTrack();
+      if (!track) {
+        setStatus("No track selected.");
+        return;
+      }
+
+      isAutoSaving = false;
+      trackLabel.textContent = track.relPath;
+      currentBpm = null;
+      lastTapCount = 0;
+      tapTimes = [];
+      updateBpmDisplayForCurrentTrack();
+
+      setStatus(`Loading ${track.relPath}...`);
+      const file = await track.getFile();
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+      }
+      currentObjectUrl = URL.createObjectURL(file);
+      await waveSurfer.load(currentObjectUrl);
+      await startPlaybackForCurrentTrack();
+    }
+
+    async function registerTap() {
+      if (isAutoSaving) {
+        return;
+      }
+
+      const now = performance.now();
+
+      if (tapTimes.length && now - tapTimes[tapTimes.length - 1] > 2500) {
+        tapTimes = [];
+      }
+
+      tapTimes.push(now);
+      if (tapTimes.length > 10) {
+        tapTimes.shift();
+      }
+
+      if (tapTimes.length < 2) {
+        tapMeta.textContent = "Keep tapping...";
+        return;
+      }
+
+      const intervals = [];
+      for (let i = 1; i < tapTimes.length; i += 1) {
+        intervals.push(tapTimes[i] - tapTimes[i - 1]);
+      }
+
+      const avgIntervalMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const bpm = 60000 / avgIntervalMs;
+      const minIntervalMs = Math.min(...intervals);
+      const maxIntervalMs = Math.max(...intervals);
+
+      currentBpm = bpm;
+      lastTapCount = intervals.length + 1;
+      bpmValue.textContent = bpm.toFixed(1);
+
+      if (tapTimes.length < 10) {
+        tapMeta.textContent = `${lastTapCount} taps (${10 - tapTimes.length} more for auto-save)`;
+        return;
+      }
+
+      tapMeta.textContent = `${lastTapCount} taps | span ${minIntervalMs.toFixed(0)}-${maxIntervalMs.toFixed(0)} ms`;
+
+      if (maxIntervalMs < 1.1 * avgIntervalMs && minIntervalMs > 0.9 * avgIntervalMs) {
+        isAutoSaving = true;
+        tapMeta.textContent = `${lastTapCount} taps | stable window detected`;
+        setStatus(`Stable 10-tap window detected for ${getCurrentTrack()?.relPath}. Saving...`);
+
+        const saved = await saveCurrentBpm();
+        if (saved) {
+          await goToNextTrack();
+        }
+        isAutoSaving = false;
+      }
+    }
+
+    async function saveCurrentBpm() {
+      const track = getCurrentTrack();
+      if (!track) {
+        setStatus("No track selected.");
+        return false;
+      }
+      if (typeof currentBpm !== "number") {
+        setStatus("Tap a BPM first before saving.");
+        return false;
+      }
+
+      const key = trackKey(track);
+      results[key] = {
+        bpm: Number(currentBpm.toFixed(2)),
+      };
+      try {
+        await idbSet(RESULTS_KEY, results, RESULTS_STORE);
+      } catch {
+        setStatus("Could not save BPM.");
+        return false;
+      }
+      updateBpmDisplayForCurrentTrack();
+      setStatus(`Saved BPM ${currentBpm.toFixed(1)} for ${track.relPath}`);
+      return true;
+    }
+
+    function downloadResults() {
+      const blob = new Blob([`${JSON.stringify(results, null, 2)}\n`], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bpm_results.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatus(`Downloaded ${Object.keys(results).length} BPM result(s).`);
+    }
+
+    const RUBBERBAND_BASE = "https://cdn.jsdelivr.net/npm/rubberband-wasm@3.3.0/dist";
+    const HALF_TARGET_TOLERANCE_BPM = 5.0;
+
+    let rubberbandApiPromise = null;
+    let decodeAudioCtx = null;
+
+    function loadRubberbandApi() {
+      if (!rubberbandApiPromise) {
+        rubberbandApiPromise = (async () => {
+          const wasmModule = await WebAssembly.compileStreaming(fetch(`${RUBBERBAND_BASE}/rubberband.wasm`));
+          return window.rubberband.RubberBandInterface.initialize(wasmModule);
+        })();
+      }
+      return rubberbandApiPromise;
+    }
+
+    function getDecodeAudioContext() {
+      if (!decodeAudioCtx) {
+        decodeAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return decodeAudioCtx;
+    }
+
+    // Mirrors main.py: snap to half-tempo when the source is already ~half the target.
+    function computeTimeRatio(sourceBpm, targetBpm) {
+      const halfTarget = targetBpm / 2;
+      const effectiveBpm =
+        Math.abs(sourceBpm - halfTarget) <= HALF_TARGET_TOLERANCE_BPM ? halfTarget : sourceBpm;
+      return effectiveBpm / targetBpm;
+    }
+
+    function runRubberband(rbApi, channelBuffers, sampleRate, timeRatio) {
+      const inputLength = channelBuffers[0].length;
+      const outputCapacity = Math.ceil(inputLength * timeRatio * 1.05) + 8192;
+      const outputBuffers = channelBuffers.map(() => new Float32Array(outputCapacity));
+
+      const state = rbApi.rubberband_new(sampleRate, channelBuffers.length, 0, 1, 1);
+      rbApi.rubberband_set_pitch_scale(state, 1);
+      rbApi.rubberband_set_time_ratio(state, timeRatio);
+      const samplesRequired = rbApi.rubberband_get_samples_required(state);
+      rbApi.rubberband_set_expected_input_duration(state, inputLength);
+
+      const channelArrayPtr = rbApi.malloc(channelBuffers.length * 4);
+      const channelDataPtr = [];
+      for (let channel = 0; channel < channelBuffers.length; channel += 1) {
+        const bufferPtr = rbApi.malloc(samplesRequired * 4);
+        channelDataPtr.push(bufferPtr);
+        rbApi.memWritePtr(channelArrayPtr + channel * 4, bufferPtr);
+      }
+
+      const feedChunks = (processChunk) => {
+        let read = 0;
+        while (read < inputLength) {
+          channelBuffers.forEach((buf, i) =>
+            rbApi.memWrite(channelDataPtr[i], buf.subarray(read, read + samplesRequired)),
+          );
+          const remaining = Math.min(samplesRequired, inputLength - read);
+          read += remaining;
+          const isFinal = read >= inputLength;
+          processChunk(remaining, isFinal ? 1 : 0);
+        }
+      };
+
+      feedChunks((remaining, final) => rbApi.rubberband_study(state, channelArrayPtr, remaining, final));
+
+      let write = 0;
+      const retrieve = (final) => {
+        for (;;) {
+          const available = rbApi.rubberband_available(state);
+          if (available < 1) {
+            break;
+          }
+          if (!final && available < samplesRequired) {
+            break;
+          }
+          const recv = rbApi.rubberband_retrieve(state, channelArrayPtr, Math.min(samplesRequired, available));
+          channelDataPtr.forEach((ptr, i) => outputBuffers[i].set(rbApi.memReadF32(ptr, recv), write));
+          write += recv;
+        }
+      };
+
+      feedChunks((remaining, final) => {
+        rbApi.rubberband_process(state, channelArrayPtr, remaining, final);
+        retrieve(false);
+      });
+      retrieve(true);
+
+      channelDataPtr.forEach((ptr) => rbApi.free(ptr));
+      rbApi.free(channelArrayPtr);
+      rbApi.rubberband_delete(state);
+
+      return outputBuffers.map((buf) => buf.subarray(0, write));
+    }
+
+    function encodeWav(sampleRate, channelBuffers) {
+      const totalSamples = channelBuffers[0].length * channelBuffers.length;
+      const buffer = new ArrayBuffer(44 + totalSamples * 2);
+      const view = new DataView(buffer);
+      const writeString = (offset, text) => {
+        for (let i = 0; i < text.length; i += 1) {
+          view.setUint8(offset + i, text.charCodeAt(i));
+        }
+      };
+
+      writeString(0, "RIFF");
+      view.setUint32(4, 36 + totalSamples * 2, true);
+      writeString(8, "WAVE");
+      writeString(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, channelBuffers.length, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * channelBuffers.length * 2, true);
+      view.setUint16(32, channelBuffers.length * 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, "data");
+      view.setUint32(40, totalSamples * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < channelBuffers[0].length; i += 1) {
+        for (let channel = 0; channel < channelBuffers.length; channel += 1) {
+          const sample = Math.max(-1, Math.min(1, channelBuffers[channel][i]));
+          view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+          offset += 2;
+        }
+      }
+      return buffer;
+    }
+
+    function sanitizeFileName(name) {
+      return name.replace(/[\\/:*?"<>|]+/g, "_");
+    }
+
+    async function downloadSpedUpSongs() {
+      const eligible = tracks.filter((track) => {
+        const saved = results[trackKey(track)];
+        return saved && typeof saved.bpm === "number";
+      });
+
+      if (!eligible.length) {
+        speedStatus.textContent = "Tap and save a BPM for at least one track first.";
+        return;
+      }
+
+      const targetBpm = Number(speedSlider.value);
+      speedUpBtn.disabled = true;
+
+      try {
+        speedStatus.textContent = "Loading time-stretch engine...";
+        const rbApi = await loadRubberbandApi();
+        const zip = new JSZip();
+
+        for (let i = 0; i < eligible.length; i += 1) {
+          const track = eligible[i];
+          const sourceBpm = results[trackKey(track)].bpm;
+          speedStatus.textContent = `Processing ${i + 1}/${eligible.length}: ${track.relPath}`;
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          const file = await track.getFile();
+          const arrayBuffer = await file.arrayBuffer();
+          const audioBuffer = await getDecodeAudioContext().decodeAudioData(arrayBuffer);
+
+          const channelBuffers = [];
+          for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+            channelBuffers.push(audioBuffer.getChannelData(channel));
+          }
+
+          const timeRatio = computeTimeRatio(sourceBpm, targetBpm);
+          const stretched = runRubberband(rbApi, channelBuffers, audioBuffer.sampleRate, timeRatio);
+          const wavBuffer = encodeWav(audioBuffer.sampleRate, stretched);
+
+          const baseName = sanitizeFileName(track.name.replace(/\.[^./]+$/, ""));
+          zip.file(`${baseName}_${targetBpm}bpm.wav`, wavBuffer);
+        }
+
+        speedStatus.textContent = "Zipping files...";
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `sped_up_${targetBpm}bpm.zip`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        speedStatus.textContent = `Done. Downloaded ${eligible.length} sped-up track(s) at ${targetBpm} BPM.`;
+      } catch (error) {
+        speedStatus.textContent = `Error: ${error.message}`;
+      } finally {
+        speedUpBtn.disabled = false;
+      }
+    }
+
+    async function goToNextTrack() {
+      if (!tracks.length) {
+        return;
+      }
+      if (currentIndex >= tracks.length - 1) {
+        setStatus("Reached last file.");
+        return;
+      }
+      currentIndex += 1;
+      await loadCurrentTrack();
+    }
+
+    function seekPercent(percent) {
+      if (!waveSurfer.getDuration()) {
+        setStatus("Load an audio file before seeking.");
+        return;
+      }
+      const progress = Math.max(0, Math.min(1, percent / 100));
+      waveSurfer.seekTo(progress);
+      setStatus(`Jumped to ${percent}%`);
+    }
+
+    async function chooseFolder() {
+      if (window.showDirectoryPicker) {
+        try {
+          const directoryHandle = await window.showDirectoryPicker();
+          rootLabel = directoryHandle.name;
+          await idbSet(HANDLE_KEY, { type: "directory", handle: directoryHandle });
+          await scanAndLoad(await collectTracksFromDirectory(directoryHandle, ""));
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            setStatus(`Could not open folder: ${error.message}`);
+          }
+        }
+        return;
+      }
+
+      // Firefox has no folder picker; fall back to a plain multi-file picker.
+      fileInput.click();
+    }
+
+    fileInput.addEventListener("change", async () => {
+      if (!fileInput.files.length) {
+        return;
+      }
+      rootLabel = "Selected Files";
+      const files = Array.from(fileInput.files);
+      await idbSet(HANDLE_KEY, { type: "files", files });
+      await scanAndLoad(collectTracksFromFileList(files));
+      fileInput.value = "";
+    });
+
+    async function init() {
+      chooseFolderBtn.addEventListener("click", chooseFolder);
+
+      const saved = await idbGet(HANDLE_KEY);
+      if (!saved) {
+        setStatus("Click \"Choose Folder…\" to select audio files.");
+        return;
+      }
+
+      if (saved.type === "files") {
+        rootLabel = "Selected Files";
+        await scanAndLoad(collectTracksFromFileList(saved.files));
+        return;
+      }
+
+      const directoryHandle = saved.handle;
+      rootLabel = directoryHandle.name;
+      const permission = await directoryHandle.queryPermission({ mode: "read" });
+      if (permission === "granted") {
+        await scanAndLoad(await collectTracksFromDirectory(directoryHandle, ""));
+        return;
+      }
+
+      folderLabel.textContent = rootLabel;
+      setStatus('Click "Choose Folder…" to re-grant access to the previously selected folder.');
+    }
+
+    playBtn.addEventListener("click", () => {
+      if (!waveSurfer.getDuration()) {
+        setStatus("Load an audio file before playing.");
+        return;
+      }
+      waveSurfer.playPause();
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      await saveCurrentBpm();
+    });
+
+    document.getElementById("downloadBtn").addEventListener("click", downloadResults);
+
+    speedSlider.addEventListener("input", () => {
+      speedValue.textContent = Number(speedSlider.value).toFixed(1);
+    });
+
+    speedUpBtn.addEventListener("click", () => {
+      void downloadSpedUpSongs();
+    });
+
+    nextBtn.addEventListener("click", async () => {
+      await goToNextTrack();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.repeat) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        void registerTap();
+        return;
+      }
+
+      if (/^Digit[1-9]$/.test(event.code)) {
+        const digit = Number(event.code.replace("Digit", ""));
+        const percent = digit * 10;
+        seekPercent(percent);
+      }
+    });
+
+    waveSurfer.on("finish", () => setStatus("Playback finished."));
+    waveSurfer.on("error", (error) => setStatus(`Audio error: ${error}`));
+
+    init();
+  </script>
+</body>
+
+</html>
